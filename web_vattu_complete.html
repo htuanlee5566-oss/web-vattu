@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Quản lý vật tư - Quân đội (Hoàn chỉnh)</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+<style>
+  :root{ --bg:#f4f6f3; --card:#e8efe5; --dark:#2e3b2f; --olive:#7a8f65; --muted:#7f9168; --table:#2e3b2f; --accent:#b6c86a;}
+  body{font-family:Arial,Helvetica,sans-serif;margin:0;background:var(--bg);color:#222}
+  .wrap{max-width:1100px;margin:18px auto;padding:16px;}
+  .camo{background:var(--card);padding:20px;border-radius:10px;box-shadow:0 2px 6px rgba(0,0,0,0.06)}
+  header h1{margin:0;background:var(--dark);color:#fff;padding:12px;border-radius:6px;display:flex;align-items:center;gap:12px}
+  header h1 img{height:48px;border-radius:6px;background:#fff;padding:2px}
+  .toolbar{display:flex;gap:10px;align-items:center;margin:14px 0;flex-wrap:wrap}
+  .tab-btn{padding:8px 14px;border-radius:8px;border:2px solid var(--muted);background:#d7e2d1;color:var(--dark);font-weight:700;cursor:pointer}
+  .tab-btn.active{background:var(--olive);color:#fff}
+  input[type="text"],select,input[type="date"],input[type="number"]{padding:8px;border-radius:6px;border:1px solid #999;}
+  .controls{display:flex;gap:10px;align-items:center}
+  .controls .search{min-width:260px}
+  .btn{padding:8px 12px;border-radius:8px;border:none;cursor:pointer}
+  .add-btn{background:var(--olive);color:#fff;font-weight:700}
+  .table-wrap{overflow:auto;background:var(--table);border-radius:8px;padding:8px}
+  table{width:100%;border-collapse:collapse;color:#fff}
+  th,td{padding:10px;border:1px solid rgba(255,255,255,0.06);text-align:center;vertical-align:middle}
+  th{background:#495c45;text-transform:uppercase;font-size:13px}
+  td img.thumb{width:80px;height:80px;object-fit:cover;border-radius:6px;border:2px solid #fff}
+  .edit-btn{background:#bba247;color:#fff;padding:6px 8px;border-radius:6px}
+  .del-btn{background:#b84747;color:#fff;padding:6px 8px;border-radius:6px}
+  .paging{display:flex;gap:8px;align-items:center;justify-content:center;margin-top:12px}
+  /* popup */
+  #popup{position:fixed;inset:0;background:rgba(0,0,0,0.5);display:none;align-items:center;justify-content:center;z-index:50}
+  .modal{width:420px;background:#fff;border-radius:10px;padding:18px;border:4px solid var(--muted);box-shadow:0 8px 30px rgba(0,0,0,0.2)}
+  .modal h3{margin:0 0 8px 0;color:var(--dark)}
+  .modal label{display:block;margin-top:8px;font-weight:600;color:#333}
+  .modal .row{display:flex;gap:8px}
+  .modal .actions{margin-top:12px;text-align:right}
+  .muted{color:#666;font-size:13px}
+  /* responsive */
+  @media(max-width:720px){ .modal{width:92%} td img.thumb{width:60px;height:60px} .controls{flex-direction:column;align-items:stretch} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="camo">
+    <header><h1><img src="logo_ppk.png.jpg" alt="logo"> QUẢN LÝ, THEO DÕI VẬT TƯ CTĐ - CTCT</h1></header>
+
+    <div class="toolbar">
+      <div class="controls">
+        <input id="searchBox" class="search" type="text" placeholder="Tìm kiếm tên vật tư...">
+        <select id="filterQuality"><option value="">-- Lọc chất lượng --</option><option value="Tốt">Tốt</option><option value="Trung bình">Trung bình</option><option value="Hỏng">Hỏng</option></select>
+        <select id="pageSizeSelect"><option value="5">5 / trang</option><option value="10" selected>10 / trang</option><option value="20">20 / trang</option><option value="50">50 / trang</option></select>
+      </div>
+
+      <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
+        <button class="btn add-btn" onclick="openPopup(null)"><i class="fa fa-plus"></i> Thêm vật tư</button>
+        <button class="btn" onclick="exportJSON()"><i class="fa-solid fa-file-export"></i> Xuất JSON</button>
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <table><thead>
+        <tr><th>STT</th><th>Hình ảnh</th><th>Tên</th><th>Đơn vị</th><th>Số lượng</th><th>Chất lượng</th><th>Thời gian</th><th>Ghi chú</th><th>Thao tác</th></tr>
+      </thead><tbody id="table-body"></tbody></table>
+    </div>
+
+    <div class="paging">
+      <button class="btn" onclick="prevPage()">« Trước</button>
+      <div class="muted">Trang <span id="pageInfo">1</span> / <span id="pageCount">1</span></div>
+      <button class="btn" onclick="nextPage()">Sau »</button>
+    </div>
+
+    <section style="margin-top:12px;color:#333;background:#fff;border-radius:8px;padding:10px">
+      <strong>Thống kê:</strong>
+      Tổng loại: <b id="tongLoai">0</b> — Tổng số lượng: <b id="tongSL">0</b>
+    </section>
+  </div>
+</div>
+
+<!-- POPUP -->
+<div id="popup">
+  <div class="modal" role="dialog" aria-modal="true">
+    <h3 id="pop-title">Thêm vật tư</h3>
+
+    <label>Hình ảnh (chọn để upload):</label>
+    <input type="file" id="imgInput" accept="image/*">
+    <img id="preview" class="thumb" style="display:none;margin-top:8px;">
+
+    <label>Tên:</label><input id="ten" type="text">
+    <div class="row">
+      <div style="flex:1">
+        <label>Đơn vị:</label><input id="donvi" type="text">
+      </div>
+      <div style="width:120px">
+        <label>Số lượng:</label><input id="soluong" type="number" min="0">
+      </div>
+    </div>
+    <label>Chất lượng:</label><input id="chatluong" type="text" placeholder="ví dụ: Tốt / Trung bình / Hỏng">
+    <label>Thời gian (ngày nhận):</label><input id="time" type="date">
+    <label>Ghi chú:</label><input id="ghichu" type="text">
+
+    <div class="actions">
+      <button class="btn add-btn" onclick="saveItem()">Lưu</button>
+      <button class="btn del-btn" onclick="closePopup()">Hủy</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// Data
+let items = JSON.parse(localStorage.getItem('vattu')) || [];
+
+// State
+let page = 1;
+let pageSize = Number(localStorage.getItem('pageSize')) || 10;
+document.getElementById('pageSizeSelect').value = String(pageSize);
+
+// Elements
+const searchBox = document.getElementById('searchBox');
+const filterQuality = document.getElementById('filterQuality');
+const pageInfo = document.getElementById('pageInfo');
+const pageCount = document.getElementById('pageCount');
+
+// Helpers
+function saveStore(){ localStorage.setItem('vattu', JSON.stringify(items)); }
+function clamp(n,min,max){ return Math.max(min, Math.min(max, n)); }
+
+// Render with search/filter/pagination
+function render(){
+  const body = document.getElementById('table-body');
+  body.innerHTML = '';
+
+  const q = searchBox.value.trim().toLowerCase();
+  let filtered = items.filter(it => (it.ten||'').toLowerCase().includes(q));
+  if(filterQuality.value) filtered = filtered.filter(it => it.chatluong === filterQuality.value);
+
+  const total = filtered.length;
+  const count = Math.max(1, Math.ceil(total / pageSize));
+  page = clamp(page,1,count);
+
+  const start = (page-1)*pageSize;
+  const pageItems = filtered.slice(start, start + pageSize);
+
+  pageItems.forEach((it, idx) => {
+    const r = document.createElement('tr');
+    r.innerHTML = `
+      <td>${start + idx + 1}</td>
+      <td>${it.img ? '<img src="'+it.img+'" class="thumb" alt="img">' : ''}</td>
+      <td style="text-align:left;padding-left:12px">${escapeHTML(it.ten||'')}</td>
+      <td>${escapeHTML(it.donvi||'')}</td>
+      <td>${Number(it.soluong||0)}</td>
+      <td>${escapeHTML(it.chatluong||'')}</td>
+      <td>${escapeHTML(it.time||'')}</td>
+      <td>${escapeHTML(it.ghichu||'')}</td>
+      <td>
+        <button class="edit-btn" onclick="openPopup(${start+idx})"><i class="fa-solid fa-pen"></i></button>
+        <button class="del-btn" onclick="deleteItem(${start+idx})"><i class="fa-solid fa-trash"></i></button>
+      </td>`;
+    body.appendChild(r);
+  });
+
+  pageInfo.textContent = page;
+  pageCount.textContent = count;
+  document.getElementById('tongLoai').textContent = items.length;
+  document.getElementById('tongSL').textContent = items.reduce((a,b)=>a+(Number(b.soluong)||0),0);
+
+  saveStore();
+}
+
+// Utilities
+function escapeHTML(s){ return String(s).replace(/[&<>"']/g, function(m){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]; }); }
+
+// Pagination controls
+function nextPage(){ page++; render(); }
+function prevPage(){ if(page>1) page--; render(); }
+
+// Popup
+let editIndex = null;
+function openPopup(index){
+  editIndex = (typeof index === 'number') ? index : null;
+  document.getElementById('popup').style.display = 'flex';
+  if(editIndex === null){
+    document.getElementById('pop-title').innerText = 'Thêm vật tư';
+    document.getElementById('preview').style.display = 'none';
+    document.getElementById('preview').src = '';
+    ten.value=''; donvi.value=''; soluong.value=''; chatluong.value=''; time.value=''; ghichu.value='';
+    imgInput.value = '';
+  } else {
+    document.getElementById('pop-title').innerText = 'Chỉnh sửa vật tư';
+    const it = items[editIndex];
+    ten.value = it.ten || ''; donvi.value = it.donvi || ''; soluong.value = it.soluong || ''; chatluong.value = it.chatluong || ''; time.value = it.time || ''; ghichu.value = it.ghichu || '';
+    if(it.img){ preview.src = it.img; preview.style.display = 'block'; } else { preview.style.display='none'; preview.src=''; }
+  }
+  // focus first field
+  setTimeout(()=>ten.focus(),60);
+}
+function closePopup(){ document.getElementById('popup').style.display = 'none'; }
+
+// Image input -> preview (base64)
+const imgInput = document.getElementById('imgInput');
+const preview = document.getElementById('preview');
+imgInput.addEventListener('change', ()=>{
+  const f = imgInput.files[0];
+  if(!f) return;
+  const r = new FileReader();
+  r.onload = e => { preview.src = e.target.result; preview.style.display = 'block'; };
+  r.readAsDataURL(f);
+});
+
+// Save item from popup
+function saveItem(){
+  const data = {
+    ten: ten.value.trim(),
+    donvi: donvi.value.trim(),
+    soluong: Number(soluong.value) || 0,
+    chatluong: chatluong.value.trim(),
+    time: time.value,
+    ghichu: ghichu.value.trim(),
+    img: preview.src || ''
+  };
+  if(!data.ten){ alert('Vui lòng nhập tên vật tư'); return; }
+  if(editIndex === null){
+    items.push(data);
+    page = Math.ceil(items.length / pageSize); // go to last page to show new
+  } else {
+    items[editIndex] = data;
+  }
+  saveStore();
+  render();
+  closePopup();
+}
+
+// Delete
+function deleteItem(i){
+  if(!confirm('Xóa mục này?')) return;
+  items.splice(i,1);
+  // adjust page if necessary
+  const maxp = Math.max(1, Math.ceil(items.length / pageSize));
+  if(page > maxp) page = maxp;
+  render();
+}
+
+// Search/filter listeners
+searchBox.addEventListener('input', ()=>{ page = 1; render(); });
+filterQuality.addEventListener('change', ()=>{ page = 1; render(); });
+
+// Page size change
+document.getElementById('pageSizeSelect').addEventListener('change', (e)=>{
+  pageSize = Number(e.target.value);
+  localStorage.setItem('pageSize', String(pageSize));
+  page = 1;
+  render();
+});
+
+// Export (simple JSON download)
+function exportJSON(){
+  const data = JSON.stringify(items, null, 2);
+  const blob = new Blob([data], {type: 'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'vattu_export.json'; document.body.appendChild(a); a.click();
+  a.remove(); URL.revokeObjectURL(url);
+}
+
+// Initialize (sample data if empty for demo)
+if(items.length === 0){
+  items = [
+    {ten:'Áo rằn ri',donvi:'Bộ',soluong:10,chatluong:'Tốt',time:'2025-01-10',ghichu:'Hàng mới',img:''},
+    {ten:'Mũ cối',donvi:'Cái',soluong:20,chatluong:'Tốt',time:'2025-02-12',ghichu:'Dự trữ',img:''},
+  ];
+  saveStore();
+}
+
+render();
+</script>
+</body>
+</html>
